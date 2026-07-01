@@ -2,13 +2,14 @@ import * as Location from 'expo-location';
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { usePalette } from '../contexts/ThemeContext';
 import { reverseGeocode } from '../lib/geocoding';
+import AnimatedPressable from './AnimatedPressable';
 
 interface LocationResult {
   name: string;
@@ -22,10 +23,12 @@ interface Props {
 }
 
 export default function LocationPicker({ locationName, onSelect }: Props) {
+  const pal = usePalette();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<LocationResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
 
   async function handleSearch(text: string) {
     setQuery(text);
@@ -53,7 +56,6 @@ export default function LocationPicker({ locationName, onSelect }: Props) {
   }
 
   function handleSelect(result: LocationResult) {
-    // Shorten the display name to the first 2-3 parts
     const short = result.name.split(',').slice(0, 3).map((s) => s.trim()).join(', ');
     onSelect(short, result.latitude, result.longitude);
     setQuery('');
@@ -79,39 +81,61 @@ export default function LocationPicker({ locationName, onSelect }: Props) {
   }
 
   return (
-    <View>
+    <View style={styles.container}>
       {/* GPS button */}
-      <Pressable style={styles.gpsBtn} onPress={handleGPS} disabled={locating}>
-        {locating
-          ? <ActivityIndicator size="small" color="#0284c7" />
-          : <Text style={styles.gpsBtnText}>📍 Use my current location</Text>
-        }
-      </Pressable>
+      <AnimatedPressable
+        style={[
+          styles.gpsBtn,
+          {
+            backgroundColor: pal.background,
+            borderColor: pal.border,
+          },
+        ]}
+        onPress={handleGPS}
+        disabled={locating}
+        scaleTo={0.97}
+      >
+        {locating ? (
+          <ActivityIndicator size="small" color={pal.primary} />
+        ) : (
+          <Text style={[styles.gpsBtnText, { color: pal.primary }]}>📍 Use Current Location</Text>
+        )}
+      </AnimatedPressable>
 
       {/* Search input */}
       <View style={styles.searchRow}>
         <TextInput
-          style={styles.searchInput}
-          placeholder="Or search a place…"
-          placeholderTextColor="#9ca3af"
+          style={[
+            styles.searchInput,
+            {
+              backgroundColor: pal.inputBg,
+              borderColor: inputFocused ? pal.primary : pal.border,
+              color: pal.text,
+            },
+          ]}
+          placeholder="Or search for a place…"
+          placeholderTextColor="#94a3b8"
           value={query}
           onChangeText={handleSearch}
           returnKeyType="search"
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => setInputFocused(false)}
         />
-        {searching && <ActivityIndicator size="small" color="#0ea5e9" style={styles.spinner} />}
+        {searching && <ActivityIndicator size="small" color={pal.primary} style={styles.spinner} />}
       </View>
 
       {/* Search results */}
       {results.length > 0 && (
-        <View style={styles.results}>
+        <View style={[styles.results, { backgroundColor: pal.surface, borderColor: pal.border }]}>
           {results.map((r, i) => (
-            <Pressable
+            <AnimatedPressable
               key={i}
-              style={[styles.resultItem, i < results.length - 1 && styles.resultBorder]}
+              style={[styles.resultItem, i < results.length - 1 && { borderBottomColor: pal.border }, styles.resultBorder]}
               onPress={() => handleSelect(r)}
+              scaleTo={0.98}
             >
-              <Text style={styles.resultText} numberOfLines={2}>{r.name}</Text>
-            </Pressable>
+              <Text style={[styles.resultText, { color: pal.text }]} numberOfLines={2}>{r.name}</Text>
+            </AnimatedPressable>
           ))}
         </View>
       )}
@@ -127,42 +151,36 @@ export default function LocationPicker({ locationName, onSelect }: Props) {
 }
 
 const styles = StyleSheet.create({
+  container: { gap: 8 },
   gpsBtn: {
-    backgroundColor: '#f0f9ff',
-    borderWidth: 1,
-    borderColor: '#bae6fd',
-    borderRadius: 12,
-    paddingVertical: 14,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingVertical: 13,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 48,
   },
-  gpsBtnText: { fontSize: 14, color: '#0284c7', fontWeight: '600' },
+  gpsBtnText: { fontSize: 13, fontWeight: '700', letterSpacing: 0.1 },
 
   searchRow: {
-    marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
+    position: 'relative',
   },
   searchInput: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
+    borderWidth: 1.5,
+    borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: '#0f172a',
+    paddingVertical: 13,
+    fontSize: 14,
   },
   spinner: { position: 'absolute', right: 14 },
 
   results: {
-    marginTop: 6,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    marginTop: 2,
+    borderRadius: 14,
+    borderWidth: 1.5,
     overflow: 'hidden',
   },
   resultItem: {
@@ -171,15 +189,16 @@ const styles = StyleSheet.create({
   },
   resultBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
   },
-  resultText: { fontSize: 13, color: '#0f172a', lineHeight: 18 },
+  resultText: { fontSize: 13, lineHeight: 18, fontWeight: '500' },
 
   confirmed: {
-    marginTop: 8,
-    backgroundColor: '#f0fdf4',
-    borderRadius: 10,
-    padding: 10,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
   },
-  confirmedText: { fontSize: 13, color: '#15803d', fontWeight: '500' },
+  confirmedText: { fontSize: 13, color: '#10B981', fontWeight: '700' },
 });

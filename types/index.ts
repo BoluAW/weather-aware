@@ -20,6 +20,9 @@ export interface Plan {
   weather_verdict: Verdict | null;
   notified_at: string | null;
   created_at: string;
+  backup_location_name: string | null;
+  backup_latitude: number | null;
+  backup_longitude: number | null;
 }
 
 export interface NotificationLog {
@@ -29,4 +32,14 @@ export interface NotificationLog {
   sent_at: string;
   verdict: Verdict;
   message: string;
+}
+
+export interface Stakeholder {
+  id: string;
+  plan_id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  notify: boolean;
+  created_at: string;
 }

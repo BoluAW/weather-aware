@@ -1,6 +1,7 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import React, { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { usePalette } from '../contexts/ThemeContext';
 
 interface Props {
   value: Date;
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function DateTimeSelector({ value, onChange, minDate }: Props) {
+  const pal = usePalette();
   const [showDate, setShowDate] = useState(false);
   const [showTime, setShowTime] = useState(false);
 
@@ -24,6 +26,20 @@ export default function DateTimeSelector({ value, onChange, minDate }: Props) {
   });
 
   if (Platform.OS === 'web') {
+    // Dynamic theme styling for web input fields
+    const dynamicWebInput: React.CSSProperties = {
+      flex: 1,
+      backgroundColor: pal.inputBg,
+      border: `1.5px solid ${pal.border}`,
+      borderRadius: '14px',
+      padding: '13px 16px',
+      fontSize: '15px',
+      color: pal.text,
+      outline: 'none',
+      cursor: 'pointer',
+      fontFamily: 'inherit',
+    };
+
     return (
       <View style={styles.row}>
         {(React.createElement as any)('input', {
@@ -34,7 +50,7 @@ export default function DateTimeSelector({ value, onChange, minDate }: Props) {
             const d = new Date(`${e.target.value}T${timeStr}`);
             if (!isNaN(d.getTime())) onChange(d);
           },
-          style: webInput,
+          style: dynamicWebInput,
         })}
         {(React.createElement as any)('input', {
           type: 'time',
@@ -43,7 +59,7 @@ export default function DateTimeSelector({ value, onChange, minDate }: Props) {
             const d = new Date(`${dateStr}T${e.target.value}`);
             if (!isNaN(d.getTime())) onChange(d);
           },
-          style: webInput,
+          style: dynamicWebInput,
         })}
       </View>
     );
@@ -52,11 +68,17 @@ export default function DateTimeSelector({ value, onChange, minDate }: Props) {
   return (
     <>
       <View style={styles.row}>
-        <Pressable style={styles.btn} onPress={() => setShowDate(true)}>
-          <Text style={styles.btnText}>📅 {formattedDate}</Text>
+        <Pressable
+          style={[styles.btn, { backgroundColor: pal.inputBg, borderColor: pal.border }]}
+          onPress={() => setShowDate(true)}
+        >
+          <Text style={[styles.btnText, { color: pal.text }]}>📅  {formattedDate}</Text>
         </Pressable>
-        <Pressable style={styles.btn} onPress={() => setShowTime(true)}>
-          <Text style={styles.btnText}>🕐 {formattedTime}</Text>
+        <Pressable
+          style={[styles.btn, { backgroundColor: pal.inputBg, borderColor: pal.border }]}
+          onPress={() => setShowTime(true)}
+        >
+          <Text style={[styles.btnText, { color: pal.text }]}>🕐  {formattedTime}</Text>
         </Pressable>
       </View>
 
@@ -85,29 +107,15 @@ export default function DateTimeSelector({ value, onChange, minDate }: Props) {
   );
 }
 
-const webInput: React.CSSProperties = {
-  flex: 1,
-  backgroundColor: '#fff',
-  border: '1px solid #e2e8f0',
-  borderRadius: 12,
-  padding: '14px 16px',
-  fontSize: 15,
-  color: '#0f172a',
-  outline: 'none',
-  cursor: 'pointer',
-  fontFamily: 'inherit',
-};
-
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 10 },
   btn: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
+    borderWidth: 1.5,
+    borderRadius: 14,
     paddingVertical: 13,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  btnText: { fontSize: 14, color: '#0f172a' },
+  btnText: { fontSize: 14, fontWeight: '600' },
 });

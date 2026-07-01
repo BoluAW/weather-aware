@@ -5,15 +5,20 @@ import {
   Animated,
   Dimensions,
   Platform,
-  Pressable,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import AnimatedPressable from '../../components/AnimatedPressable';
+import LoadingScreen from '../../components/LoadingScreen';
 import RainAnimation from '../../components/RainAnimation';
 import { getTheme } from '../../constants/weatherThemes';
+import { useSettings } from '../../contexts/SettingsContext';
+import { usePalette } from '../../contexts/ThemeContext';
 import { reverseGeocode } from '../../lib/geocoding';
+import { formatTemperature, formatWindDirection, formatWindSpeed } from '../../lib/units';
 
 const { width: W } = Dimensions.get('window');
 
@@ -29,20 +34,21 @@ function WeatherMap({ lat, lon }: { lat: number; lon: number }) {
       {React.createElement('iframe', {
         src,
         title: 'Location map',
-        style: { width: '100%', height: '100%', border: 'none', borderRadius: 16 },
+        style: { width: '100%', height: '100%', border: 'none', borderRadius: 20 },
       })}
     </View>
   );
 }
 
 const mapStyles = StyleSheet.create({
-  container: { height: 200, borderRadius: 16, overflow: 'hidden', marginTop: 10 },
+  container: { height: 220, borderRadius: 20, overflow: 'hidden', marginTop: 12 },
 });
 
 interface CurrentWeather {
   temperature_2m: number;
   weathercode: number;
   windspeed_10m: number;
+  winddirection_10m: number;
   relativehumidity_2m: number;
   precipitation: number;
   apparent_temperature: number;
@@ -83,6 +89,8 @@ function formatFullDate() {
 }
 
 export default function CurrentWeatherScreen() {
+  const { unit, windFormat } = useSettings();
+  const pal = usePalette();
   const [locationName, setLocationName] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [weather, setWeather] = useState<CurrentWeather | null>(null);
@@ -126,7 +134,7 @@ export default function CurrentWeatherScreen() {
       const params = new URLSearchParams({
         latitude: lat.toString(),
         longitude: lon.toString(),
-        current: 'temperature_2m,apparent_temperature,weathercode,windspeed_10m,relativehumidity_2m,precipitation',
+        current: 'temperature_2m,apparent_temperature,weathercode,windspeed_10m,winddirection_10m,relativehumidity_2m,precipitation',
         hourly: 'temperature_2m,weathercode',
         daily: 'weathercode,temperature_2m_max,temperature_2m_min,uv_index_max,precipitation_probability_max',
         timezone: 'auto',
@@ -188,150 +196,151 @@ export default function CurrentWeatherScreen() {
     : '';
 
   if (loading) {
-    return (
-      <LinearGradient colors={['#1B55EE', '#3B75F8', '#96BAFF']} style={styles.screen}>
-        <Text style={styles.loadingText}>Getting your weather…</Text>
-      </LinearGradient>
-    );
+    return <LoadingScreen message="Getting your weather…" />;
   }
 
   if (error || !weather) {
     return (
       <LinearGradient colors={['#1B55EE', '#3B75F8', '#96BAFF']} style={styles.screen}>
-        <Text style={styles.errorText}>{error || 'Could not load weather.'}</Text>
-        <Pressable style={styles.retryBtn} onPress={load}>
-          <Text style={styles.retryText}>Try Again</Text>
-        </Pressable>
+        <SafeAreaView style={styles.centerWrapper}>
+          <Text style={styles.errorText}>{error || 'Could not load weather.'}</Text>
+          <AnimatedPressable style={styles.retryBtn} onPress={load}>
+            <Text style={styles.retryText}>Try Again</Text>
+          </AnimatedPressable>
+        </SafeAreaView>
       </LinearGradient>
     );
   }
 
   return (
     <LinearGradient colors={gradient} style={styles.screen} start={{ x: 0.3, y: 0 }} end={{ x: 0.7, y: 1 }}>
-
       {theme?.isRaining && (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <RainAnimation />
         </View>
       )}
 
-      <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+          {/* ── Gradient section ── */}
+          <View style={styles.gradientSection}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View>
+                <Text style={styles.headerSubtitle}>CURRENT OUTLOOK</Text>
+                <Text style={styles.headerTitle}>Weather Forecast</Text>
+              </View>
+              <AnimatedPressable style={styles.refreshBtn} onPress={load} scaleTo={0.85}>
+                <Text style={styles.refreshIcon}>↻</Text>
+              </AnimatedPressable>
+            </View>
 
-        {/* ── Gradient section ── */}
-        <View style={styles.gradientSection}>
+            {/* Location */}
+            <View style={styles.locationRow}>
+              <Text style={styles.locationText} numberOfLines={1}>📍 {locationName}</Text>
+            </View>
 
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Weather Forecast</Text>
-            <Pressable onPress={load}>
-              <Text style={styles.refreshIcon}>↻</Text>
-            </Pressable>
+            {/* Alert banner */}
+            {hasAlert && (
+              <View style={styles.alertBanner}>
+                <Text style={styles.alertText}>⚠️  {alertText}</Text>
+              </View>
+            )}
+
+            {/* Temp + icon */}
+            <Animated.View style={[styles.tempRow, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+              <View>
+                <Text style={styles.temp}>{formatTemperature(weather.temperature_2m, unit)}</Text>
+                <Text style={styles.dateText}>{formatFullDate()}</Text>
+                <Text style={styles.feelsLike}>Feels like {formatTemperature(weather.apparent_temperature, unit)}</Text>
+              </View>
+              <Text style={styles.weatherIcon}>{theme?.icon}</Text>
+            </Animated.View>
+
+            {/* Stats 2×2 grid */}
+            <Animated.View style={[styles.statsGrid, { opacity: fadeAnim }]}>
+              <View style={styles.statsRow}>
+                <StatCell icon="💧" label="Humidity" value={`${weather.relativehumidity_2m}%`} />
+                <View style={styles.vertDivider} />
+                <StatCell icon="☀️" label="UV Index" value={`${uvIndex}/10`} />
+              </View>
+              <View style={styles.horizDivider} />
+              <View style={styles.statsRow}>
+                <StatCell icon="🌧️" label="Rain" value={`${rainChance}%`} />
+                <View style={styles.vertDivider} />
+                <StatCell
+                  icon="💨"
+                  label="Wind"
+                  value={`${formatWindSpeed(weather.windspeed_10m, unit)} ${formatWindDirection(weather.winddirection_10m, windFormat)}`}
+                />
+              </View>
+            </Animated.View>
           </View>
 
-          {/* Location */}
-          <View style={styles.locationRow}>
-            <Text style={styles.locationText} numberOfLines={1}>📍 {locationName}</Text>
-          </View>
-
-          {/* Alert banner */}
-          {hasAlert && (
-            <View style={styles.alertBanner}>
-              <Text style={styles.alertText}>⚠️  {alertText}</Text>
+          {/* ── White bottom sheet ── */}
+          <View style={[styles.bottomSheet, { backgroundColor: pal.surface }]}>
+            {/* Today high / low pill */}
+            <View style={[styles.todayPill, { backgroundColor: pal.background }]}>
+              <Text style={[styles.todayLabel, { color: pal.textMuted }]}>Today</Text>
+              <Text style={styles.todayHigh}> ↑{formatTemperature(todayHigh, unit)}</Text>
+              <Text style={styles.todayLow}> ↓{formatTemperature(todayLow, unit)}</Text>
+              <View style={styles.pillDivider} />
+              <Text style={[styles.todayLabel, { color: pal.textMuted }]}>{theme?.label}</Text>
             </View>
-          )}
 
-          {/* Temp + icon */}
-          <Animated.View style={[styles.tempRow, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-            <View>
-              <Text style={styles.temp}>{Math.round(weather.temperature_2m)}°C</Text>
-              <Text style={styles.dateText}>{formatFullDate()}</Text>
-              <Text style={styles.feelsLike}>Feels like {Math.round(weather.apparent_temperature)}°</Text>
-            </View>
-            <Text style={styles.weatherIcon}>{theme?.icon}</Text>
-          </Animated.View>
-
-          {/* Stats 2×2 grid */}
-          <Animated.View style={[styles.statsGrid, { opacity: fadeAnim }]}>
-            <View style={styles.statsRow}>
-              <StatCell icon="💧" label="Humidity" value={`${weather.relativehumidity_2m}%`} />
-              <View style={styles.vertDivider} />
-              <StatCell icon="☀️" label="UV Index" value={`${uvIndex}/10`} />
-            </View>
-            <View style={styles.horizDivider} />
-            <View style={styles.statsRow}>
-              <StatCell icon="🌧️" label="Rain" value={`${rainChance}%`} />
-              <View style={styles.vertDivider} />
-              <StatCell icon="💨" label="Wind" value={`${Math.round(weather.windspeed_10m)} km/h`} />
-            </View>
-          </Animated.View>
-
-        </View>
-
-        {/* ── White bottom sheet ── */}
-        <View style={styles.bottomSheet}>
-
-          {/* Today high / low pill */}
-          <View style={styles.todayPill}>
-            <Text style={styles.todayLabel}>Today</Text>
-            <Text style={styles.todayHigh}> ↑{Math.round(todayHigh)}°</Text>
-            <Text style={styles.todayLow}> ↓{Math.round(todayLow)}°</Text>
-            <View style={styles.pillDivider} />
-            <Text style={styles.todayLabel}>{theme?.label}</Text>
-          </View>
-
-          {/* Hourly forecast */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Hourly Forecast</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hourlyScroll}>
-              {hourly.map((h, i) => {
-                const t = getTheme(h.code);
-                return (
-                  <View key={i} style={styles.hourlyItem}>
-                    <Text style={styles.hourTime}>{formatHour(h.time)}</Text>
-                    <View style={styles.hourIconCircle}>
-                      <Text style={styles.hourIcon}>{t?.icon ?? '🌡️'}</Text>
+            {/* Hourly forecast */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: pal.text }]}>Hourly Forecast</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hourlyScroll}>
+                {hourly.map((h, i) => {
+                  const t = getTheme(h.code);
+                  return (
+                    <View key={i} style={styles.hourlyItem}>
+                      <Text style={[styles.hourTime, { color: pal.textMuted }]}>{formatHour(h.time)}</Text>
+                      <View style={[styles.hourIconCircle, { backgroundColor: pal.background }]}>
+                        <Text style={styles.hourIcon}>{t?.icon ?? '🌡️'}</Text>
+                      </View>
+                      <Text style={[styles.hourTemp, { color: pal.text }]}>{formatTemperature(h.temp, unit)}</Text>
                     </View>
-                    <Text style={styles.hourTemp}>{Math.round(h.temp)}°</Text>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* 5-day forecast */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: pal.text }]}>Upcoming Days</Text>
+              {daily.map((d, i) => {
+                const t = getTheme(d.code);
+                return (
+                  <View key={i} style={[styles.dayRow, i < daily.length - 1 && { borderBottomColor: pal.border }, styles.dayRowBorder]}>
+                    <View style={[styles.dayIconCircle, { backgroundColor: pal.background }]}>
+                      <Text style={styles.dayIcon}>{t?.icon ?? '🌡️'}</Text>
+                    </View>
+                    <View style={styles.dayInfo}>
+                      <Text style={[styles.dayLabel, { color: pal.text }]}>{formatDayLabel(d.date)}</Text>
+                      <Text style={[styles.dayCondition, { color: pal.textMuted }]}>{t?.label}</Text>
+                    </View>
+                    <View style={styles.dayTemps}>
+                      <Text style={styles.dayHigh}>↑{formatTemperature(d.high, unit)}</Text>
+                      <Text style={[styles.dayLow, { color: pal.textMuted }]}>↓{formatTemperature(d.low, unit)}</Text>
+                    </View>
                   </View>
                 );
               })}
-            </ScrollView>
-          </View>
-
-          {/* 5-day forecast */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Upcoming</Text>
-            {daily.map((d, i) => {
-              const t = getTheme(d.code);
-              return (
-                <View key={i} style={[styles.dayRow, i < daily.length - 1 && styles.dayRowBorder]}>
-                  <View style={styles.dayIconCircle}>
-                    <Text style={styles.dayIcon}>{t?.icon ?? '🌡️'}</Text>
-                  </View>
-                  <View style={styles.dayInfo}>
-                    <Text style={styles.dayLabel}>{formatDayLabel(d.date)}</Text>
-                    <Text style={styles.dayCondition}>{t?.label}</Text>
-                  </View>
-                  <View style={styles.dayTemps}>
-                    <Text style={styles.dayHigh}>↑{Math.round(d.high)}°</Text>
-                    <Text style={styles.dayLow}>↓{Math.round(d.low)}°</Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-
-          {/* Precipitation map */}
-          {coords && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Precipitation</Text>
-              <Text style={styles.mapSubtitle}>Weather for {locationName}</Text>
-              <WeatherMap lat={coords.lat} lon={coords.lon} />
             </View>
-          )}
 
-        </View>
-      </ScrollView>
+            {/* Precipitation map */}
+            {coords && (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: pal.text }]}>Location Map</Text>
+                <Text style={[styles.mapSubtitle, { color: pal.textMuted }]}>Weather station for {locationName}</Text>
+                <WeatherMap lat={coords.lat} lon={coords.lon} />
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
     </LinearGradient>
   );
 }
@@ -339,7 +348,9 @@ export default function CurrentWeatherScreen() {
 function StatCell({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
     <View style={styles.statCell}>
-      <Text style={styles.statIcon}>{icon}</Text>
+      <View style={styles.statIconCircle}>
+        <Text style={styles.statIcon}>{icon}</Text>
+      </View>
       <View>
         <Text style={styles.statLabel}>{label}</Text>
         <Text style={styles.statValue}>{value}</Text>
@@ -350,58 +361,71 @@ function StatCell({ icon, label, value }: { icon: string; label: string; value: 
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  loadingText: { color: 'rgba(255,255,255,0.7)', fontSize: 15, textAlign: 'center', marginTop: 300 },
-  errorText: { color: 'rgba(255,255,255,0.7)', fontSize: 15, textAlign: 'center', marginTop: 280, paddingHorizontal: 32 },
-  retryBtn: { alignSelf: 'center', marginTop: 16, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 24, paddingVertical: 10 },
-  retryText: { color: '#fff', fontWeight: '600' },
+  centerWrapper: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  errorText: { color: 'rgba(255,255,255,0.85)', fontSize: 16, fontWeight: '500', textAlign: 'center', marginBottom: 20 },
+  retryBtn: { backgroundColor: 'rgba(255,255,255,0.22)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 20, paddingHorizontal: 28, paddingVertical: 12 },
+  retryText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 
   gradientSection: {
-    paddingTop: Platform.OS === 'ios' ? 54 : 20,
     paddingHorizontal: 20,
-    paddingBottom: 32,
+    paddingBottom: 28,
   },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginTop: 10,
+    marginBottom: 8,
   },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: '#fff' },
-  refreshIcon: { color: '#fff', fontSize: 22, fontWeight: '700' },
+  headerSubtitle: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.7)', letterSpacing: 1.5 },
+  headerTitle: { fontSize: 24, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
+  refreshBtn: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  refreshIcon: { color: '#fff', fontSize: 18, fontWeight: '700', marginTop: -2 },
 
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  locationText: { color: '#fff', fontSize: 20, fontWeight: '700', flex: 1 },
+  locationText: { color: '#fff', fontSize: 18, fontWeight: '700', flex: 1 },
 
   alertBanner: {
     backgroundColor: 'rgba(0,0,0,0.35)',
-    borderRadius: 24,
+    borderRadius: 20,
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginBottom: 16,
+    paddingVertical: 12,
+    marginBottom: 20,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  alertText: { color: '#fff', fontSize: 13, fontWeight: '500' },
+  alertText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 
   tempRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    marginBottom: 28,
   },
-  temp: { fontSize: 80, fontWeight: '300', color: '#fff', lineHeight: 84, letterSpacing: -2 },
-  dateText: { fontSize: 15, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
-  feelsLike: { fontSize: 13, color: 'rgba(255,255,255,0.55)', marginTop: 2 },
-  weatherIcon: { fontSize: 80 },
+  temp: { fontSize: 84, fontWeight: '200', color: '#fff', lineHeight: 88, letterSpacing: -3 },
+  dateText: { fontSize: 15, color: 'rgba(255,255,255,0.85)', fontWeight: '500', marginTop: 4 },
+  feelsLike: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
+  weatherIcon: { fontSize: 82 },
 
   statsGrid: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 24,
     overflow: 'hidden',
   },
   statsRow: { flexDirection: 'row', alignItems: 'center' },
@@ -409,57 +433,72 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     padding: 16,
   },
-  statIcon: { fontSize: 22 },
-  statLabel: { fontSize: 11, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: 0.3 },
-  statValue: { fontSize: 16, fontWeight: '700', color: '#fff', marginTop: 1 },
-  vertDivider: { width: 1, height: 48, backgroundColor: 'rgba(255,255,255,0.2)' },
-  horizDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 16 },
+  statIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statIcon: { fontSize: 18 },
+  statLabel: { fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  statValue: { fontSize: 15, fontWeight: '700', color: '#fff', marginTop: 1 },
+  vertDivider: { width: 1, height: 48, backgroundColor: 'rgba(255,255,255,0.15)' },
+  horizDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginHorizontal: 16 },
 
   bottomSheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingTop: 8,
-    paddingBottom: 32,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingTop: 12,
+    paddingBottom: 40,
     minHeight: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.06,
+    shadowRadius: 20,
+    elevation: 5,
   },
 
   todayPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f1f5f9',
-    borderRadius: 24,
+    borderRadius: 20,
     marginHorizontal: 20,
     marginVertical: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
     gap: 4,
   },
-  todayLabel: { fontSize: 14, color: '#64748b', fontWeight: '500' },
-  todayHigh: { fontSize: 14, fontWeight: '700', color: '#F97316' },
-  todayLow: { fontSize: 14, fontWeight: '700', color: '#0ea5e9' },
+  todayLabel: { fontSize: 14, fontWeight: '600' },
+  todayHigh: { fontSize: 14, fontWeight: '700', color: '#EF4444' },
+  todayLow: { fontSize: 14, fontWeight: '700', color: '#3B82F6' },
   pillDivider: { flex: 1 },
 
-  section: { paddingHorizontal: 20, marginBottom: 8 },
-  sectionTitle: { fontSize: 17, fontWeight: '700', color: '#0f172a', marginBottom: 4 },
-  mapSubtitle: { fontSize: 12, color: '#94a3b8', marginBottom: 0 },
+  section: { paddingHorizontal: 20, marginTop: 16, marginBottom: 8 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', marginBottom: 12, letterSpacing: -0.2 },
+  mapSubtitle: { fontSize: 12, marginBottom: 0 },
 
-  hourlyScroll: { gap: 12, paddingRight: 4, paddingBottom: 4 },
-  hourlyItem: { alignItems: 'center', gap: 8, width: 64 },
-  hourTime: { fontSize: 11, color: '#64748b', fontWeight: '500' },
+  hourlyScroll: { gap: 14, paddingRight: 4, paddingBottom: 4 },
+  hourlyItem: { alignItems: 'center', gap: 8, width: 68 },
+  hourTime: { fontSize: 11, fontWeight: '600' },
   hourIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#EEF4FF',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   hourIcon: { fontSize: 24 },
-  hourTemp: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
+  hourTemp: { fontSize: 14, fontWeight: '700' },
 
   dayRow: {
     flexDirection: 'row',
@@ -467,20 +506,24 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     gap: 14,
   },
-  dayRowBorder: { borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  dayRowBorder: { borderBottomWidth: 1.5 },
   dayIconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#EEF4FF',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   dayIcon: { fontSize: 22 },
   dayInfo: { flex: 1 },
-  dayLabel: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
-  dayCondition: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  dayLabel: { fontSize: 14, fontWeight: '700' },
+  dayCondition: { fontSize: 12, marginTop: 2 },
   dayTemps: { flexDirection: 'row', gap: 8 },
-  dayHigh: { fontSize: 14, fontWeight: '700', color: '#F97316' },
-  dayLow: { fontSize: 14, fontWeight: '600', color: '#94a3b8' },
+  dayHigh: { fontSize: 14, fontWeight: '700', color: '#EF4444' },
+  dayLow: { fontSize: 14, fontWeight: '600' },
 });

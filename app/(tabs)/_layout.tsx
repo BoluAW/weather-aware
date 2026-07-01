@@ -1,20 +1,25 @@
 import { Tabs } from 'expo-router';
+import { usePalette } from '../../contexts/ThemeContext';
+import { ColorValue } from 'react-native';
 
 export default function TabsLayout() {
+  const pal = usePalette();
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#0ea5e9',
-        tabBarInactiveTintColor: '#94a3b8',
+        tabBarActiveTintColor: pal.primary,
+        tabBarInactiveTintColor: pal.textMuted,
         tabBarStyle: {
-          backgroundColor: '#fff',
-          borderTopColor: '#e2e8f0',
+          backgroundColor: pal.surface,
+          borderTopColor: pal.border,
+          borderTopWidth: 1,
           paddingBottom: 6,
           height: 60,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
-        headerStyle: { backgroundColor: '#fff' },
-        headerTitleStyle: { fontWeight: '700', color: '#0f172a' },
+        headerStyle: { backgroundColor: pal.surface },
+        headerTitleStyle: { fontWeight: '700', color: pal.text },
         headerShadowVisible: false,
       }}
     >
@@ -43,6 +48,8 @@ export default function TabsLayout() {
         options={{
           title: 'Add Plan',
           tabBarLabel: 'Add',
+          headerStyle: { backgroundColor: pal.background },
+          headerTitleStyle: { fontWeight: '700', color: pal.text },
           tabBarIcon: ({ color }) => (
             <TabIcon icon="➕" color={color} />
           ),
@@ -51,7 +58,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
+          headerShown: false,
           tabBarLabel: 'Settings',
           tabBarIcon: ({ color }) => (
             <TabIcon icon="⚙️" color={color} />
@@ -62,7 +69,7 @@ export default function TabsLayout() {
   );
 }
 
-function TabIcon({ icon }: { icon: string; color: string }) {
+function TabIcon({ icon, color }: { icon: string; color: ColorValue }) {
   const { Text } = require('react-native');
-  return <Text style={{ fontSize: 20 }}>{icon}</Text>;
+  return <Text style={{ fontSize: 20, color }}>{icon}</Text>;
 }

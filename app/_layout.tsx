@@ -1,7 +1,10 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Session } from '@supabase/supabase-js';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import LoadingScreen from '../components/LoadingScreen';
+import { SettingsProvider } from '../contexts/SettingsContext';
+import { ThemeProvider } from '../contexts/ThemeContext';
 import { registerForPushNotifications, savePushToken } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 
@@ -27,25 +30,35 @@ export default function RootLayout() {
   useEffect(() => {
     if (loading) return;
 
-    const inAuthGroup = segments[0] === '(auth)';
+    (async () => {
+      const hasSeenOnboarding = (await AsyncStorage.getItem('has_seen_onboarding')) === 'true';
+      const inAuthGroup = segments[0] === '(auth)';
+      const onOnboarding = segments[1] === 'onboarding';
 
-    if (!session && !inAuthGroup) {
-      router.replace('/(auth)/login');
-    } else if (session && inAuthGroup) {
-      router.replace('/(tabs)');
-      registerForPushNotifications().then((token) => {
-        if (token) savePushToken(token);
-      });
-    }
+      if (!session) {
+        if (!hasSeenOnboarding && !onOnboarding) {
+          router.replace('/(auth)/onboarding');
+        } else if (hasSeenOnboarding && !inAuthGroup) {
+          router.replace('/(auth)/login');
+        }
+      } else if (session && inAuthGroup) {
+        router.replace('/(tabs)');
+        registerForPushNotifications().then((token) => {
+          if (token) savePushToken(token);
+        });
+      }
+    })();
   }, [session, loading, segments]);
 
   if (loading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc' }}>
-        <ActivityIndicator size="large" color="#0ea5e9" />
-      </View>
-    );
+    return <LoadingScreen />;
   }
 
-  return <Slot />;
+  return (
+    <ThemeProvider>
+      <SettingsProvider>
+        <Slot />
+      </SettingsProvider>
+    </ThemeProvider>
+  );
 }
